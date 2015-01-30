@@ -1,0 +1,18 @@
+[Unit]
+Description=deis-proxy
+Requires=docker.socket etcd.service
+After=docker.socket etcd.service
+
+[Service]
+EnvironmentFile=/etc/environment_proxy
+ExecStartPre=/bin/sh -c "docker pull munkyboy/redsocks:latest"
+ExecStartPre=/bin/sh -c "docker inspect deis-proxy >/dev/null && docker rm -f deis-proxy || true"
+ExecStart=/bin/sh -c "docker run  --net=host --name deis-proxy --rm -e http_proxy=$http_proxy -e https_proxy=$https_proxy munkyboy/redsocks"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+[X-Fleet]
+Global=true

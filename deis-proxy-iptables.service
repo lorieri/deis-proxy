@@ -1,0 +1,18 @@
+[Unit]
+Description=IPtables Rules for Deis Proxy
+DefaultDependencies=no
+After=systemd-sysctl.service
+Before=sysinit.target
+ 
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "/etc/deis/iptables.sh"
+ExecReload=/bin/sh -c "iptables -F REDSOCKS -t nat ; /etc/deis/iptables.sh"
+ExecStop=/usr/sbin/iptables -F REDSOCKS -t nat
+RemainAfterExit=yes
+ 
+[Install]
+WantedBy=multi-user.target
+
+[X-Fleet]
+Global=true
