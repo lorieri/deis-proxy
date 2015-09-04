@@ -4,6 +4,10 @@
 
  * access to a HTTP proxy server
 
+## New
+
+ * starts in the early-docker
+
 ## How does it work ?
 
 ```
@@ -14,11 +18,11 @@
 ```
 ## How to use it
 
-  * append the content of the file user-data.example into your CoreOS user-data
-    * configure the http_proxy and https_proxy variables
+  * Use the content of the file user-data.example to configure your CoreOS user-data
     * the "no_proxy" equivalent is the RETURN rules in the iptables file, edit it in case you need
-  * after you install CoreOS or run the user-data, load the units
+  * or manually run the iptables.sh script, configure the .service files and start the units
 ```
+$ sudo bash iptables.sh # in the coreos host
 $ fleetctl start deis-proxy-iptables.service
 $ fleetctl start deis-proxy.service
 ``` 

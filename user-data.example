@@ -1,8 +1,51 @@
-  - path: /etc/environment_proxy
-    owner: core
+# add the lines bellow to etcd
+#      Requires=early-docker.service deis-proxy.service
+#      After=early-docker.service deis-proxy.service
+
+# add the line bellow to flannel
+#      Requires=early-docker.service etcd.service deis-proxy.service
+#      After=etcd.service early-docker.service deis-proxy.service
+
+# configure LOCAL_REGISTRY to a registry not passing through the proxy
+# configure PROXY_URL
+  - name: deis-proxy.service
+    command: start
     content: |
-      http_proxy=
-      https_proxy=
+      [Unit]
+      Description=deis-proxy
+      Requires=early-docker.socket deis-proxy-iptables.service
+      After=early-docker.socket deis-proxy-iptables.service
+
+      [Service]
+      Environment="LOCAL_REGISTRY=mylocalregistry.local"
+      Environment="PROXY_URL=http://myproxy.local:3128"
+      Environment="DOCKER_HOST=unix:///var/run/early-docker.sock"
+      ExecStartPre=/bin/sh -c "docker pull ${LOCAL_REGISTRY}/munkyboy/redsocks:latest"
+      ExecStartPre=/bin/sh -c "docker inspect deis-proxy >/dev/null && docker rm -f deis-proxy || true"
+      ExecStart=/bin/sh -c "docker run  --net=host --name deis-proxy --rm -e http_proxy=${PROXY_URL} -e https_proxy=${PROXY_URL} ${LOCAL_REGISTRY}/munkyboy/redsocks"
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+  - name: deis-proxy-iptables.service
+    command: start
+    content: |
+      [Unit]
+      Description=IPtables Rules for Deis Proxy
+      DefaultDependencies=no
+      After=systemd-sysctl.service
+      Before=sysinit.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c "/etc/deis/iptables.sh"
+      ExecReload=/bin/sh -c "iptables -F REDSOCKS -t nat ; /etc/deis/iptables.sh"
+      ExecStop=/usr/sbin/iptables -F REDSOCKS -t nat
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
   - path: /etc/deis/iptables.sh
     permissions: '0755'
     owner: root
@@ -22,3 +65,21 @@
 
       iptables -t nat -C PREROUTING -p tcp -j REDSOCKS        || iptables -t nat -A PREROUTING -p tcp -j REDSOCKS
       iptables -t nat -C OUTPUT     -p tcp -j REDSOCKS        || iptables -t nat -A OUTPUT     -p tcp -j REDSOCKS
+
+# configure early-docker insecure-registry to be able to get 
+# the proxy image from your LOCAL_REGISTRY
+  - path: /etc/systemd/system/early-docker.service
+    content: |
+      [Unit]
+      Description=Early Docker Application Container Engine
+      Documentation=http://docs.docker.com
+      After=early-docker.socket
+      Requires=early-docker.socket
+
+      [Service]
+      Environment="LOCAL_REGISTRY=mylocalregistry.local"
+      Environment=TMPDIR=/var/tmp
+      MountFlags=slave
+      LimitNOFILE=1048576
+      LimitNPROC=1048576
+      ExecStart=/usr/lib/coreos/dockerd --daemon --host=fd:// --bridge=none --iptables=false --ip-masq=false --graph=/var/lib/early-docker --pidfile=/var/run/early-docker.pid --insecure-registry 10.0.0.0/8 --insecure-registry 172.16.0.0/12 --insecure-registry 192.168.0.0/16 --insecure-registry 100.64.0.0/10 --insecure-registry ${LOCAL_REGISTRY}

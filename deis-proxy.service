@@ -1,13 +1,15 @@
 [Unit]
 Description=deis-proxy
-Requires=docker.socket etcd.service
-After=docker.socket etcd.service
+Requires=early-docker.socket deis-proxy-iptables.service
+After=early-docker.socket deis-proxy-iptables.service
 
 [Service]
-EnvironmentFile=/etc/environment_proxy
-ExecStartPre=/bin/sh -c "docker pull munkyboy/redsocks:latest"
+Environment="LOCAL_REGISTRY=mylocalregistry.local"
+Environment="PROXY_URL=http://myproxy.local:3128"
+Environment="DOCKER_HOST=unix:///var/run/early-docker.sock"
+ExecStartPre=/bin/sh -c "docker pull ${LOCAL_REGISTRY}/munkyboy/redsocks:latest"
 ExecStartPre=/bin/sh -c "docker inspect deis-proxy >/dev/null && docker rm -f deis-proxy || true"
-ExecStart=/bin/sh -c "docker run  --net=host --name deis-proxy --rm -e http_proxy=$http_proxy -e https_proxy=$https_proxy munkyboy/redsocks"
+ExecStart=/bin/sh -c "docker run  --net=host --name deis-proxy --rm -e http_proxy=${PROXY_URL} -e https_proxy=${PROXY_URL} ${LOCAL_REGISTRY}/munkyboy/redsocks"
 Restart=on-failure
 RestartSec=5
 
